@@ -355,13 +355,14 @@ bool UModBuilder::ZipModInternal(const FString& ModName)
 
 	TArray<FString> FilesToArchive{OutFileName};
 
+	// TODO: Curse Forge requires all files to be at the root. Support other formats (if any) as well.
 	for (FString FileName : FilesToArchive)
 	{
 		TArray<uint8> FileData;
 		FFileHelper::LoadFileToArray(FileData, *FileName);
-		FPaths::MakePathRelativeTo(FileName, *OutputDir);
+		// FPaths::MakePathRelativeTo(FileName, *OutputDir);
 
-		ZipWriter->AddFile(FileName, FileData, FDateTime::Now());
+		ZipWriter->AddFile(FPaths::GetCleanFilename(FileName), FileData, FDateTime::Now());
 	}
 
 	delete ZipWriter;
