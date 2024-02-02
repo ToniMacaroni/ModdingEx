@@ -19,7 +19,7 @@ Mainly for usage with [UE4SS](https://github.com/UE4SS-RE/RE-UE4SS)
 
 **Using prebuilt binaries**
 1) Go to [Releases](https://github.com/ToniMacaroni/ModdingEx/releases) and download the latest one.
-2) Drop the contents of the zip into `your_uneal_project/Plugins/` (create the `Plugin` folder if it doesn't exist).
+2) Drop the contents of the zip into `your_uneal_project/Plugins/` (create the `Plugins` folder if it doesn't exist).
 
 **Building from source**
 1) Open the terminal.
