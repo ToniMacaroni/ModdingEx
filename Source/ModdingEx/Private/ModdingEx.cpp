@@ -325,11 +325,13 @@ void FModdingExModule::OnOpenBlueprintCreator() const
 
 	const auto PackagePath = SNew(SMultiLineEditableTextBox)
 		.Text(FText::FromString("/Game/Pal/Blueprints/BP_GameBlueprint"))
-		.ToolTipText(FText::FromString("The path to the blueprint (you can copy it from FModel)"));
+		.ToolTipText(FText::FromString("The path to the blueprint (you can copy it from FModel)"))
+		.SelectAllTextWhenFocused(true);
 
 	const auto ParentClass = SNew(SMultiLineEditableTextBox)
 		.Text(FText::FromString("/Script/CoreUObject.Object"))
-		.ToolTipText(FText::FromString("The parent class of the blueprint (UObject by default). Also accepts a json string with {\"ObjectName\":... , \"ObjectPath\":...}"));
+		.ToolTipText(FText::FromString("The parent class of the blueprint (UObject by default). Also accepts a json string with {\"ObjectName\":... , \"ObjectPath\":...}"))
+		.SelectAllTextWhenFocused(true);
 
 	const auto BlueprintCheck = SNew(SCheckBox)
 		.Content()
@@ -408,7 +410,8 @@ void FModdingExModule::OnOpenModCreator() const
 	const TSharedRef<SMultiLineEditableTextBox> ModNameEdit = SNew(SMultiLineEditableTextBox)
 		.Text(FText::FromString("MyMod"))
 		.Font(FSlateFontInfo(FPaths::EngineContentDir() / TEXT("Slate/Fonts/Roboto-Bold.ttf"), 12))
-		.ToolTipText(FText::FromString("The name of the mod you want to create. This will be the name of the folder in the Mods folder"));
+		.ToolTipText(FText::FromString("The name of the mod you want to create. This will be the name of the folder in the Mods folder"))
+		.SelectAllTextWhenFocused(true);
 
 	const auto BlueprintCheck = SNew(SCheckBox)
 		.Content()
