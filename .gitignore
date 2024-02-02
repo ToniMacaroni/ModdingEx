@@ -1,0 +1,8 @@
+*.obj
+*.dll
+*.pdb
+*.generated.h
+Intermediate/
+Binaries/
+*.Template.cs
+*.uplugin.Template
