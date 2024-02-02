@@ -221,7 +221,7 @@ bool UBlueprintCreator::CreateModBlueprint(const FString& ModName, UClass* Class
 	Info.Image = FAppStyle::GetBrush(TEXT("LevelEditor.RecompileGameCode"));
 	Info.FadeInDuration = 0.1f;
 	Info.FadeOutDuration = 0.5f;
-	Info.ExpireDuration = 1.5f;
+	Info.ExpireDuration = 3.5f;
 	Info.bUseThrobber = false;
 	Info.bUseSuccessFailIcons = true;
 	Info.bUseLargeFont = true;

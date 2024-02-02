@@ -383,7 +383,8 @@ bool UModBuilder::ZipModInternal(const FString& ModName)
 
 	GEditor->PlayEditorSound(TEXT("/Engine/EditorSounds/Notifications/CompileSuccess_Cue.CompileSuccess_Cue"));
 
-	FPlatformProcess::ExploreFolder(*FPaths::ConvertRelativePathToFull(ZipsPath));
+	if(Settings->bOpenZipFolderAfterZipping)
+		FPlatformProcess::ExploreFolder(*FPaths::ConvertRelativePathToFull(ZipsPath));
 
 	return true;
 }

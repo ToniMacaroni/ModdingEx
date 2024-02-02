@@ -66,8 +66,13 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx")
 	bool bZipWhenContentIsSame = false;
 
+	/** Path where the zipped mods should be saved to */
 	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx")
 	FDirectoryPath ModZipDir = { "Saved/Zips" };
+
+	/** If true will open the folder where the zipped mod was saved to after zipping */
+	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx")
+	bool bOpenZipFolderAfterZipping = true;
 
 	/** A list of events to add when creating a new mod. If you have common events that you hook in lua, add them here */
 	UPROPERTY(Config, EditAnywhere, Category= "ModdingEx | Advanced")
