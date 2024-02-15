@@ -180,8 +180,15 @@ bool UModBuilder::GetOutputFolder(bool bIsLogicMod, FString& OutFolder)
 
 	if (!FPaths::DirectoryExists(OutFolder))
 	{
-		UE_LOG(LogModdingEx, Error, TEXT("Output folder does not exist: %s"), *OutFolder);
-		return false;
+		if (!IFileManager::Get().MakeDirectory(*OutFolder, true))
+		{
+			UE_LOG(LogModdingEx, Error, TEXT("Output folder could not be created: %s"), *OutFolder);
+			return false;
+		}
+
+		UE_LOG(LogModdingEx, Log, TEXT("Output folder created: %s"), *OutFolder);
+		//UE_LOG(LogModdingEx, Error, TEXT("Output folder does not exist: %s"), *OutFolder);
+		// return false;
 	}
 
 	return true;

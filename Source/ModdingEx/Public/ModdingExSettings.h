@@ -50,21 +50,25 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx")
 	bool bShouldKillProcesses = true;
 
-	/** If true checks the hash of the output file before and after building to check if stuff has changed */
-	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx")
-	bool bShouldCheckHash = true;
-
 	/** When chosen a mod to build before starting the game via the button, this will cancel the start if the mod building wasn't successul */
 	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx")
 	bool bShouldStartGameAfterFailedBuild = false;
 
+	/** If true checks the hash of the output file before and after building to check if stuff has changed */
+	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx | Hash Check")
+	bool bShouldCheckHash = true;
+
+	/** If building before starting the game is enabled then this will disable the check to see if the content has changed */
+	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx | Hash Check")
+	bool bDontCheckHashOnGameStart = false;
+
+	/** Also zip the mod even if the content stayed the same after building */
+	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx | Hash Check")
+	bool bZipWhenContentIsSame = false;
+
 	/** If true will build the mod before zipping it (using Modding Tools -> Zip Mod) */
 	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx")
 	bool bAlwaysBuildBeforeZipping = true;
-
-	/** Also zip the mod even if the content stayed the same after building */
-	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx")
-	bool bZipWhenContentIsSame = false;
 
 	/** Path where the zipped mods should be saved to */
 	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx")
@@ -85,4 +89,8 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx | Misc")
 	bool bIsFirstStart = true;
+
+	/** Whether to notify once an update to the plugin is availble */
+	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx | Misc")
+	bool bShowUpdateDialog = true;
 };

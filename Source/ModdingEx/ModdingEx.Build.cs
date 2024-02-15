@@ -1,12 +1,18 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
+using System.IO;
 using UnrealBuildTool;
 
 public class ModdingEx : ModuleRules
 {
+	private string ThirdPartyPath => Path.GetFullPath(Path.Combine(ModuleDirectory, "../ThirdParty/"));
+	private string MinhookPath => Path.GetFullPath(Path.Combine(ThirdPartyPath, "minhook", "include"));
+
 	public ModdingEx(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
+		bUseRTTI = true;
+		bEnableExceptions = true;
 		
 		PublicIncludePaths.AddRange(
 			new string[] {
@@ -17,7 +23,7 @@ public class ModdingEx : ModuleRules
 		
 		PrivateIncludePaths.AddRange(
 			new string[] {
-				// ... add other private include paths required here ...
+				MinhookPath,
 			}
 			);
 			
@@ -25,7 +31,7 @@ public class ModdingEx : ModuleRules
 		PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
-				"Core",
+				"Core", "PropertyEditor"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
@@ -43,7 +49,7 @@ public class ModdingEx : ModuleRules
 				"Engine",
 				"Slate",
 				"SlateCore",
-				"ToolWidgets", "Json", "Kismet", "BlueprintGraph", "FileUtilities"
+				"ToolWidgets", "Json", "Kismet", "BlueprintGraph", "FileUtilities", "PropertyEditor", "HTTP"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

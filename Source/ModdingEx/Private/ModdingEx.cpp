@@ -8,11 +8,17 @@
 #include "ModdingAssets.h"
 #include "ModdingExSettings.h"
 #include "SPositiveActionButton.h"
+#include "StartupDialog.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Text/STextBlock.h"
 #include "ToolMenus.h"
+#include "UpdateDialog.h"
 #include "Kismet2/KismetEditorUtilities.h"
+#include "Kismet2/SClassPickerDialog.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
+#include "Widgets/Input/SHyperlink.h"
 #include "Widgets/Input/SMultiLineEditableTextBox.h"
 #include "Widgets/Input/STextComboBox.h"
 
@@ -54,6 +60,16 @@ void FModdingExModule::StartupModule()
 		FExecuteAction::CreateRaw(this, &FModdingExModule::OnOpenPluginSettings),
 		FCanExecuteAction());
 
+	PluginCommands->MapAction(
+		FModdingExCommands::Get().OpenGameFolder,
+		FExecuteAction::CreateRaw(this, &FModdingExModule::OnOpenGameFolder),
+		FCanExecuteAction());
+
+	PluginCommands->MapAction(
+		FModdingExCommands::Get().OpenRepository,
+		FExecuteAction::CreateRaw(this, &FModdingExModule::OnOpenRepository),
+		FCanExecuteAction());
+
 	UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FModdingExModule::RegisterMenus));
 	FWorldDelegates::OnPostWorldInitialization.AddRaw(this, &FModdingExModule::OnPostWorldInit);
 }
@@ -72,6 +88,8 @@ void FModdingExModule::ShutdownModule()
 	{
 		SettingsModule->UnregisterSettings("Project", "Plugins", "ModdingEx");
 	}
+	
+	FWorldDelegates::OnPostWorldInitialization.RemoveAll(this);
 }
 
 void FModdingExModule::RegisterMenus()
@@ -162,7 +180,12 @@ void FModdingExModule::RegisterMenus()
 
 						MenuBuilder.AddMenuEntry(FModdingExCommands::Get().OpenModCreator);
 						MenuBuilder.AddMenuEntry(FModdingExCommands::Get().OpenBlueprintCreator);
+						MenuBuilder.AddMenuEntry(FModdingExCommands::Get().OpenGameFolder);
 						MenuBuilder.AddMenuEntry(FModdingExCommands::Get().OpenPluginSettings);
+
+						MenuBuilder.BeginSection(FName("ModdingEx_GoTo"), LOCTEXT("ModdingEx_GoTo", "Go To"));
+						MenuBuilder.AddMenuEntry(FModdingExCommands::Get().OpenRepository);
+						MenuBuilder.EndSection();
 
 						InNewToolMenu->AddMenuEntry(
 							"ModdingEx_ToolEntry",
@@ -230,96 +253,109 @@ void FModdingExModule::RegisterMenus()
 	}
 }
 
-void FModdingExModule::OnPostWorldInit(UWorld* World, const UWorld::InitializationValues IVS) const
+void FModdingExModule::OnPostWorldInit(UWorld* World, const UWorld::InitializationValues IVS)
 {
+	FWorldDelegates::OnPostWorldInitialization.RemoveAll(this);
+	
 	UModdingExSettings* Settings = GetMutableDefault<UModdingExSettings>();
 
 	if(Settings->bIsFirstStart)
 	{
-		// FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("ModdingEx_FirstStart", "Welcome to ModdingEx! This Plugin makes heavy use of tooltips. If you are not sure what an option does, hover over it to get a description."));
-
-		StartingDialog(LOCTEXT("ModdingEx", "ModdingEx"), LOCTEXT("ModdingEx_FirstStartHeader", "Welcome to ModdingEx!"), LOCTEXT("ModdingEx_FirstStart", "This Plugin makes heavy use of tooltips. If you are not sure what an option does, hover over it to get a description."));
+		StartupDialog::ShowDialog(LOCTEXT("ModdingEx", "ModdingEx"), LOCTEXT("ModdingEx_FirstStartHeader", "Welcome to ModdingEx!"), LOCTEXT("ModdingEx_FirstStart", "This Plugin makes heavy use of tooltips. If you are not sure what an option does, hover over it to get a description."));
 		
 		Settings->bIsFirstStart = false;
 		Settings->SaveConfig();
 	}
+
+	UpdateDialog::CheckForUpdate();
 }
 
-void FModdingExModule::StartingDialog(const FText& Title, const FText& HeaderText, const FText& Message) const
-{
-	FSlateFontInfo HeaderFont = FCoreStyle::GetDefaultFontStyle("Regular", 16);
-	FSlateFontInfo ContentFont = FCoreStyle::GetDefaultFontStyle("Regular", 10);
-	
-	const TSharedPtr<SWindow> Dialog = SNew(SWindow)
-						.Title(Title)
-						.SupportsMaximize(false)
-						.SupportsMinimize(false)
-						.FocusWhenFirstShown(true)
-						.SizingRule(ESizingRule::Autosized)
-		[
-			SNew(SVerticalBox)
-			+ SVerticalBox::Slot()
-			.FillHeight(0.25f)
-			[
-				SNew(SSpacer)
-			]
-			+ SVerticalBox::Slot()
-			.Padding(10, 0, 10, 20)
-			.AutoHeight()
-			[
-				SNew(STextBlock)
-				.Text(HeaderText)
-				.Font(HeaderFont)
-				.AutoWrapText(true)
-				.Justification(ETextJustify::Center)
-			]
-			+ SVerticalBox::Slot()
-			.Padding(10, 0)
-			.AutoHeight()
-			[
-				SNew(STextBlock)
-				.Text(Message)
-				.Font(ContentFont)
-				.AutoWrapText(true)
-			]
-			+ SVerticalBox::Slot()
-			.FillHeight(0.75f)
-			[
-				SNew(SSpacer)
-			]
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot()
-				.FillWidth(1.0f)
-				[
-					SNew(SSpacer)
-				]
-				+ SHorizontalBox::Slot()
-				.AutoWidth()
-				.Padding(0.0f, 3.0f, 7.0f, 7.0f)
-				[
-					SNew(SButton)
-					.Text(LOCTEXT("GotIt", "Got it"))
-					.ContentPadding(7)
-					.OnClicked_Lambda([&]
-					{
-						Dialog->RequestDestroyWindow();
-						return FReply::Handled();
-					})
-				]
-			]
-		];
-
-	FSlateApplication::Get().AddModalWindow(Dialog.ToSharedRef(), nullptr);
-}
-
+// TArray<TSharedPtr<FString>> PropList;
 void FModdingExModule::OnOpenBlueprintCreator() const
 {
+	// PropList.Empty();
+	// const auto W2 = SNew(SWindow).Title(FText::FromString("Cr2")).ClientSize({600,400});
+	// const auto TB = SNew(SMultiLineEditableTextBox);
+	// const auto LST = SNew(SListView<TSharedPtr<FString>>)
+	// 	.ListItemsSource(&PropList)
+	// 	.OnGenerateRow_Lambda([](TSharedPtr<FString> Item, const TSharedRef<STableViewBase>& OwnerTable)
+	// 	{
+	// 		return SNew(STableRow<TSharedPtr<FString>>, OwnerTable)
+	// 		[
+	// 			SNew(STextBlock).Text(FText::FromString(*Item))
+	// 		];
+	// 	});
+	//
+	// W2->SetContent(SNew(SVerticalBox)
+	// 	+ SVerticalBox::Slot()
+	// 	.FillHeight(1)
+	// 	[
+	// 		TB
+	// 	]
+	// 	+ SVerticalBox::Slot()
+	// 	.FillHeight(1)
+	// 	.Padding(10)
+	// 	[
+	// 		LST
+	// 	]
+	// 	+ SVerticalBox::Slot()
+	// 	.AutoHeight()
+	// 	[
+	// 		SNew(SButton)
+	// 		.Text(FText::FromString("Create"))
+	// 		.OnClicked(FOnClicked::CreateLambda([&]
+	// 		{
+	// 			TArray<TSharedPtr<FJsonValue>> Arr;
+	// 			const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(TB->GetText().ToString());
+	// 			if(FJsonSerializer::Deserialize(Reader, Arr))
+	// 			{
+	// 				for (TSharedPtr<FJsonValue> JsonValue : Arr)
+	// 				{
+	// 					auto JsonObject = JsonValue->AsObject();
+	//
+	// 					FString Name;
+	// 					const TArray<TSharedPtr<FJsonValue>>* ChildProps = nullptr;
+	// 					
+	// 					if(!JsonObject->TryGetStringField("Name", Name))
+	// 						continue;
+	//
+	// 					if(!JsonObject->TryGetArrayField("ChildProperties", ChildProps))
+	// 						continue;
+	//
+	// 					for (auto ChildProp : *ChildProps)
+	// 					{
+	// 						auto PropObject = ChildProp->AsObject();
+	// 						
+	// 						FString PropName;
+	// 						FString PropType;
+	//
+	// 						if(!PropObject->TryGetStringField("Name", PropName))
+	// 							continue;
+	//
+	// 						if(!PropObject->TryGetStringField("Type", PropType))
+	// 							continue;
+	//
+	// 						if(PropType != "ObjectProperty")
+	// 							continue;
+	//
+	// 						PropList.Add(MakeShared<FString>(PropName + " (" + PropType + ")"));
+	// 					}
+	// 				}
+	// 			}
+	//
+	// 			LST->RequestListRefresh();
+	// 			
+	// 			return FReply::Handled();
+	// 		}))
+	// 	]
+	// 	);
+	//
+	// FSlateApplication::Get().AddModalWindow(W2, FSlateApplication::Get().GetActiveTopLevelWindow());
+	//
+	// return;
 	const TSharedRef<SWindow> Window = SNew(SWindow)
 		.Title(LOCTEXT("ModdingEx_BlueprintCreatorTitle", "Blueprint Creator"))
-		.ClientSize({400, 250})
+		.ClientSize({400, 300})
 		.SupportsMaximize(false)
 		.SupportsMinimize(false);
 
@@ -364,6 +400,21 @@ void FModdingExModule::OnOpenBlueprintCreator() const
 		.Padding(7)
 		[
 			ParentClass
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(7, 0, 7, 7)
+		[
+			SNew(SPositiveActionButton).Icon(FAppStyle::Get().GetBrush("Icons.Find"))
+			.Text(FText::FromString("Pick Class"))
+			.OnClicked(FOnClicked::CreateLambda([ParentClass]
+			{
+				FClassViewerInitializationOptions Options;
+				UClass* OutClass = nullptr;
+				SClassPickerDialog::PickClass(FText::FromString("Pick Class"), Options, OutClass, UObject::StaticClass());
+				ParentClass->SetText(FText::FromString(OutClass->GetPathName()));
+				return FReply::Handled();
+			}))
 		]
 		+ SVerticalBox::Slot()
 		.FillHeight(1)
@@ -500,7 +551,7 @@ FReply FModdingExModule::TryStartGame() const
 		if(!Mod.IsEmpty() && Mod != "None")
 		{
 			UE_LOG(LogModdingEx, Log, TEXT("Starting game after building %s"), *Mod);
-			if(!UModBuilder::BuildMod(Mod) && !Settings->bShouldStartGameAfterFailedBuild)
+			if(!UModBuilder::BuildMod(Mod, !Settings->bDontCheckHashOnGameStart) && !Settings->bShouldStartGameAfterFailedBuild)
 			{
 				UE_LOG(LogModdingEx, Error, TEXT("Failed to build mod %s"), *Mod);
 				return FReply::Handled();
@@ -509,13 +560,34 @@ FReply FModdingExModule::TryStartGame() const
 	}
 
 	FPlatformProcess::CreateProc(*GamePath, nullptr, true, false, false, nullptr, 0, nullptr, nullptr);
-	
+
 	return FReply::Handled();
+}
+
+void FModdingExModule::OnOpenGameFolder() const
+{
+	const auto Settings = GetDefault<UModdingExSettings>();
+	FString GamePath = Settings->GameDir.Path;
+
+	if (GamePath.IsEmpty())
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("GameDir is empty!"));
+		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString("GameDir is empty!"));
+		return;
+	}
+
+	GamePath = FPaths::ConvertRelativePathToFull(GamePath);
+	FPlatformProcess::ExploreFolder(*GamePath);
 }
 
 void FModdingExModule::OnOpenPluginSettings() const
 {
 	FModuleManager::LoadModuleChecked<ISettingsModule>("Settings").ShowViewer("Project", "Plugins", "ModdingEx");
+}
+
+void FModdingExModule::OnOpenRepository() const
+{
+	FPlatformProcess::LaunchURL(TEXT("https://github.com/ToniMacaroni/ModdingEx"), nullptr, nullptr);
 }
 
 #undef LOCTEXT_NAMESPACE

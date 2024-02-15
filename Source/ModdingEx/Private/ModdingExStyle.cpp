@@ -40,6 +40,7 @@ TSharedRef< FSlateStyleSet > FModdingExStyle::Create()
 	Style->SetContentRoot(IPluginManager::Get().FindPlugin("ModdingEx")->GetBaseDir() / TEXT("Resources"));
 
 	Style->Set("ModdingEx.OpenPluginWindow", new IMAGE_BRUSH_SVG(TEXT("PlaceholderButtonIcon"), Icon20x20));
+	Style->Set("ModdingEx.Github", new IMAGE_BRUSH_SVG(TEXT("GitHub"), Icon20x20));
 
 	return Style;
 }

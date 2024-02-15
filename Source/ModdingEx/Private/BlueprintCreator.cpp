@@ -50,6 +50,7 @@ bool UBlueprintCreator::CreateGameBlueprint(const FString& Path, const FString& 
 
 	if(ClassName.IsEmpty())
 		Class = UObject::StaticClass();
+	
 	else if(ClassName.StartsWith("{"))
 	{
 		TSharedPtr<FJsonObject> JsonObj;

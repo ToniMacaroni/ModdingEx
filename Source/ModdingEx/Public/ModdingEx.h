@@ -15,12 +15,14 @@ public:
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
 
-	void OnPostWorldInit(UWorld* World, const UWorld::InitializationValues IVS) const;
-	void StartingDialog(const FText& Title, const FText& HeaderText, const FText& Message) const;
+	void OnPostWorldInit(UWorld* World, const UWorld::InitializationValues IVS);
 	void OnOpenPluginSettings() const;
 	void OnOpenBlueprintCreator() const;
 	void OnOpenModCreator() const;
 	FReply TryStartGame() const;
+	void OnOpenGameFolder() const;
+	void OnOpenRepository() const;
+
 
 private:
 	void RegisterMenus();

@@ -19,4 +19,6 @@ public:
 	TSharedPtr<FUICommandInfo> OpenModCreator;
 	TSharedPtr<FUICommandInfo> OpenBlueprintCreator;
 	TSharedPtr<FUICommandInfo> OpenPluginSettings;
+	TSharedPtr<FUICommandInfo> OpenGameFolder;
+	TSharedPtr<FUICommandInfo> OpenRepository;
 };
