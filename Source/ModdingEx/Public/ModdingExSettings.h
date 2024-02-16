@@ -66,6 +66,10 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx | Hash Check")
 	bool bZipWhenContentIsSame = false;
 
+	/** If true will save all assets before building a mod */
+	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx")
+	bool bSaveAllBeforeBuilding = true;
+
 	/** If true will build the mod before zipping it (using Modding Tools -> Zip Mod) */
 	UPROPERTY(Config, EditAnywhere, Category = "ModdingEx")
 	bool bAlwaysBuildBeforeZipping = true;

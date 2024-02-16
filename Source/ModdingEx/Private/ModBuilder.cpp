@@ -1,5 +1,6 @@
 ﻿#include "ModBuilder.h"
 
+#include "FileHelpers.h"
 #include "ISettingsModule.h"
 #include "ModdingEx.h"
 #include "ModdingExSettings.h"
@@ -214,6 +215,18 @@ bool UModBuilder::BuildMod(const FString& ModName, bool bIsSameContentError)
 	UE_LOG(LogModdingEx, Log, TEXT("Output dir: %s"), *OutputDir);
 
 	const FString OutFileName = OutputDir / (ModName + ".pak");
+
+	if(Settings->bSaveAllBeforeBuilding)
+	{
+		const bool bPromptUserToSave = false;
+		const bool bSaveMapPackages = true;
+		const bool bSaveContentPackages = true;
+		const bool bFastSave = false;
+		const bool bNotifyNoPackagesSaved = false;
+		const bool bCanBeDeclined = false;
+		FEditorFileUtils::SaveDirtyPackages( bPromptUserToSave, bSaveMapPackages, bSaveContentPackages, bFastSave, bNotifyNoPackagesSaved, bCanBeDeclined );
+		UE_LOG(LogModdingEx, Log, TEXT("Saved all packages"));
+	}
 
 	FMD5Hash InputHash = FMD5Hash();
 	if (Settings->bShouldCheckHash && FPaths::FileExists(OutFileName))
