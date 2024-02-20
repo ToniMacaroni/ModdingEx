@@ -257,8 +257,16 @@ bool UModBuilder::BuildMod(const FString& ModName, bool bIsSameContentError)
 
 	UE_LOG(LogModdingEx, Log, TEXT("Building mod"));
 
+	const FString ModPath = FString("/Game") / "Mods" / ModName;
+	EditDirectoriesToAlwaysCook(ModPath, false);	
+
 	SlowTask.EnterProgressFrame(1, FText::FromString("Cooking mod"));
-	if (!Cook())
+	const bool bCooked = Cook();
+
+	// Remove the mod from the list of directories to always cook even if fail
+	EditDirectoriesToAlwaysCook(ModPath, true);
+	
+	if (!bCooked)
 	{
 		UE_LOG(LogModdingEx, Error, TEXT("Cooking failed"));
 		return false;
@@ -314,6 +322,61 @@ bool UModBuilder::BuildMod(const FString& ModName, bool bIsSameContentError)
 	GEditor->PlayEditorSound(TEXT("/Engine/EditorSounds/Notifications/CompileSuccess_Cue.CompileSuccess_Cue"));
 
 	return true;
+}
+
+void UModBuilder::EditDirectoriesToAlwaysCook(const FString& DirectoryToCook, const bool bShouldRemove)
+{
+	const FString IniFilePath = FPaths::ProjectConfigDir() / "DefaultGame.ini";
+	
+	FString FileContents;
+	FFileHelper::LoadFileToString(FileContents, *IniFilePath);
+	
+	TArray<FString> Lines;
+	FileContents.ParseIntoArrayLines(Lines);
+
+	const FString LineToModify = FString::Printf(TEXT("+DirectoriesToAlwaysCook=(Path=\"%s\")"), *DirectoryToCook);
+	
+	FString ModifiedContents;
+	bool bSectionFound = false;
+
+	for (FString& Line : Lines)
+	{
+		if (Line.Contains(TEXT("[/Script/UnrealEd.ProjectPackagingSettings]")))
+		{
+			bSectionFound = true;
+		}
+		else if (bSectionFound && Line.StartsWith(TEXT("[")))
+		{
+			if (!bShouldRemove)
+			{
+				ModifiedContents += LineToModify + TEXT("\n");
+			}
+			bSectionFound = false;
+		}
+		
+		if (bShouldRemove && bSectionFound && Line.TrimStart().Equals(LineToModify))
+		{
+			continue;
+		}
+		
+		ModifiedContents += Line + TEXT("\n");
+	}
+
+	if (bSectionFound && !bShouldRemove)
+	{
+		ModifiedContents += LineToModify + TEXT("\n");
+	}
+
+	const bool bSuccess = FFileHelper::SaveStringToFile(ModifiedContents, *IniFilePath);
+
+	if (!bSuccess)
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Failed to save file: %s"), *IniFilePath);
+	}
+	else
+	{
+		UE_LOG(LogModdingEx, Log, TEXT("File saved successfully: %s"), *IniFilePath);
+	}
 }
 
 bool UModBuilder::ZipModInternal(const FString& ModName)

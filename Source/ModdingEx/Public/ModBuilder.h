@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "ModBuilder.generated.h"
@@ -9,6 +9,8 @@ class UModBuilder : public UBlueprintFunctionLibrary
 	GENERATED_BODY()
 	
 private:
+	static void EditDirectoriesToAlwaysCook(const FString& DirectoryToCook, const bool bShouldRemove = false);
+	
 	static bool ZipModInternal(const FString& ModName);
 
 	TPromise<bool> BuildModAsync(const FString& ModName, bool bForceRebuild);
