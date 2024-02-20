@@ -75,12 +75,12 @@ bool UBlueprintCreator::CreateGameBlueprint(const FString& Path, const FString& 
 				return nullptr;
 			}
 
-			Class = FindObject<UClass>(ANY_PACKAGE, *(ObjectPath + "." + ObjectName));
+			Class = FindObject<UClass>(nullptr, *(ObjectPath + "." + ObjectName));
 		}
 	}
 	else
 	{
-		Class = FindObject<UClass>(ANY_PACKAGE, *ClassName);
+		Class = FindObject<UClass>(nullptr, *ClassName);
 	}
 
 	if(!Class)
