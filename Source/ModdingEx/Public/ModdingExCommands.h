@@ -16,7 +16,7 @@ public:
 	virtual void RegisterCommands() override;
 
 public:
-	TSharedPtr<FUICommandInfo> OpenModCreator;
+	TSharedPtr<FUICommandInfo> OpenBlueprintModCreator;
 	TSharedPtr<FUICommandInfo> OpenBlueprintCreator;
 	TSharedPtr<FUICommandInfo> OpenPluginSettings;
 	TSharedPtr<FUICommandInfo> OpenGameFolder;

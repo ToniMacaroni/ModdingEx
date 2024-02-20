@@ -9,7 +9,12 @@
 #include "FileUtilities/ZipArchiveWriter.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "HAL/PlatformProcess.h"
 #include "Misc/ScopedSlowTask.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
+#include "UObject/UnrealType.h"
 #include "Widgets/Notifications/SNotificationList.h"
 
 // TODO: Make this async
@@ -93,7 +98,7 @@ FString UModBuilder::CreateFilesTxt(const FString& RootDir, const FString& Track
 }
 
 bool UModBuilder::Cook()
-{
+{	
 	FString Args = FString::Printf(
 		TEXT("\"%s\" -run=Cook -TargetPlatform=Windows -unversioned -stdout -CrashForUAT -unattended -NoLogTimes -UTF8Output"),
 		*(FPaths::ProjectDir() / FApp::GetProjectName() + TEXT(".uproject")));
@@ -324,6 +329,52 @@ bool UModBuilder::BuildMod(const FString& ModName, bool bIsSameContentError)
 	return true;
 }
 
+bool UModBuilder::PrepareModForRelease(const FString& ModName, const FString& WebsiteUrl, const FString& Dependencies)
+{
+	// Fetch the mod author, description and version from the /Game/Mods/ModName/ModActor blueprint
+	FString ModAuthor = "Unknown";
+	FString ModDesc = "Unknown";
+	FString ModVersion = "1.0.0";
+
+	if (!GetModProperties(ModName, ModVersion, ModAuthor, ModDesc))
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Failed to get mod properties"));
+		return false;
+	}
+
+	// Create the manifest.json and README.md using the mod properties
+	const auto Settings = GetDefault<UModdingExSettings>();
+
+	const FString StagingDir = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), Settings->PrepStagingDir.Path) / ModName;
+
+	const FString ManifestPath = StagingDir / "manifest.json";
+	FString ModManifest;
+	CreateModManifest(ModManifest, ModName, WebsiteUrl, Dependencies, ModDesc, ModVersion);
+
+	if (!FFileHelper::SaveStringToFile(ModManifest, *ManifestPath))
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Failed to save manifest.json"));
+		return false;
+	}
+
+	const FString ReadmePath = StagingDir / "README.md";
+	FString Readme;
+	CreateModReadme(Readme, ModName, ModDesc, ModVersion, ModAuthor);
+
+	if (Settings->bOpenReadmeAfterPrep)
+	{
+		if (!FFileHelper::SaveStringToFile(Readme, *ReadmePath))
+		{
+			UE_LOG(LogModdingEx, Error, TEXT("Failed to save README.md"));
+			return false;
+		}
+
+		FPlatformProcess::LaunchFileInDefaultExternalApplication(*ReadmePath, nullptr, ELaunchVerb::Edit);
+	}
+
+	return true;
+}
+
 void UModBuilder::EditDirectoriesToAlwaysCook(const FString& DirectoryToCook, const bool bShouldRemove)
 {
 	const FString IniFilePath = FPaths::ProjectConfigDir() / "DefaultGame.ini";
@@ -471,6 +522,112 @@ bool UModBuilder::ZipModInternal(const FString& ModName)
 		FPlatformProcess::ExploreFolder(*FPaths::ConvertRelativePathToFull(ZipsPath));
 
 	return true;
+}
+
+void UModBuilder::CreateModManifest(FString& OutModManifest, const FString& ModName, const FString& WebsiteUrl,
+                                    const FString& Dependencies, const FString& ModDesc, const FString& ModVersion)
+{
+	/*
+	 * Format:
+	*	{
+			"name": "HelloWorld",
+			"version_number": "1.0.0",
+			"description": "Hello palworld!",
+			"website_url": "https://github.com/thunderstore-io",
+			"dependencies": [
+				"Thunderstore-unreal_shimloader-1.0.2"
+			]
+		}
+	*/
+
+	// Turn Dependencies (which is a comma separated list of mod names) into a json array
+	TArray<TSharedPtr<FJsonValue>> Deps;
+	TArray<FString> DepsArray;
+	Dependencies.ParseIntoArray(DepsArray, TEXT(","), true);
+	for (const FString& Dep : DepsArray)
+	{
+		Deps.Add(MakeShareable(new FJsonValueString(Dep)));
+	}
+
+	TSharedPtr<FJsonObject> JsonObject = MakeShareable(new FJsonObject);
+	JsonObject->SetStringField("name", ModName);
+	JsonObject->SetStringField("version_number", ModVersion);
+	JsonObject->SetStringField("description", ModDesc);
+	JsonObject->SetStringField("website_url", WebsiteUrl);
+	JsonObject->SetArrayField("dependencies", Deps);
+	
+	FString JsonString;
+	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonString);
+	FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer);
+
+	OutModManifest = JsonString;
+}
+
+void UModBuilder::CreateModReadme(FString& OutModReadme, const FString& ModName, const FString& ModDesc,
+	const FString& ModVersion, const FString& ModAuthor)
+{
+	OutModReadme = FString::Printf(TEXT("# %s\n\n%s\n\n## Version: %s\n\n## Author: %s"), *ModName, *ModDesc, *ModVersion, *ModAuthor);
+}
+
+bool UModBuilder::GetModProperties(const FString& ModName, FString& OutModVersion, FString& OutModAuthor,
+                                   FString& OutModDescription)
+{
+	const FString ModActorPath = FString("/Game") / "Mods" / ModName / "ModActor";
+	const FString ModActorClassPath = ModActorPath + ".ModActor";
+
+	const UBlueprint* ModActorBlueprint = LoadObject<UBlueprint>(nullptr, *ModActorClassPath);
+	if (!ModActorBlueprint)
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Failed to load ModActor blueprint: %s"), *ModActorClassPath);
+		return false;
+	}
+	
+	const UClass* ModActorClass = ModActorBlueprint->GeneratedClass;
+	if (!ModActorClass)
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Invalid generated class for blueprint: %s"), *ModActorClassPath);
+		return false;
+	}
+
+	// Temporary instance of the blueprint class to access variable values
+	UObject* ModActorInstance = NewObject<UObject>(GetTransientPackage(), ModActorClass);
+	if (!ModActorInstance)
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Failed to create an instance of the ModActor class."));
+		return false;
+	}
+	
+	if (FString* FoundModAuthor = FindFStringPropertyValue(ModActorInstance, "ModAuthor"))
+	{
+		OutModAuthor = *FoundModAuthor;
+	}
+
+	if (FString* FoundModDesc = FindFStringPropertyValue(ModActorInstance, "ModDescription"))
+	{
+		OutModDescription = *FoundModDesc;
+	}
+
+	if (FString* FoundModVersion = FindFStringPropertyValue(ModActorInstance, "ModVersion"))
+	{
+		OutModVersion = *FoundModVersion;
+	}
+	
+	UE_LOG(LogModdingEx, Log, TEXT("Mod Author: %s, Description: %s, Version: %s"),
+		*OutModAuthor, *OutModDescription, *OutModVersion);
+	
+	ModActorInstance->ConditionalBeginDestroy();
+
+	return true;
+}
+
+FString* UModBuilder::FindFStringPropertyValue(UObject* Object, const FName& PropertyName)
+{
+	if (!Object) return nullptr;
+	
+	const FStrProperty* StringProp = FindFProperty<FStrProperty>(Object->GetClass(), PropertyName);
+	if (!StringProp) return nullptr;
+	
+	return StringProp->ContainerPtrToValuePtr<FString>(Object);
 }
 
 bool UModBuilder::ZipMod(const FString& ModName)

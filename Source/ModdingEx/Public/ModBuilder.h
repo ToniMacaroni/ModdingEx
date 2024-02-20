@@ -13,6 +13,16 @@ private:
 	
 	static bool ZipModInternal(const FString& ModName);
 
+	static void CreateModManifest(FString& OutModManifest, const FString& ModName, const FString& WebsiteUrl,
+	                              const FString& Dependencies, const FString& ModDesc, const FString& ModVersion);
+
+	static void CreateModReadme(FString& OutModReadme, const FString& ModName, const FString& ModDesc,
+								  const FString& ModVersion, const FString& ModAuthor);
+
+	static bool GetModProperties(const FString& ModName, FString& OutModVersion, FString& OutModAuthor, FString& OutModDescription);
+
+	static FString* FindFStringPropertyValue(UObject* Object, const FName& PropertyName);
+
 	TPromise<bool> BuildModAsync(const FString& ModName, bool bForceRebuild);
 
 public:
@@ -20,6 +30,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Mod Building")
 	static bool BuildMod(const FString& ModName, bool bIsSameContentError = true);
+
+	UFUNCTION(BlueprintCallable, Category = "Mod Building")
+	static bool PrepareModForRelease(const FString& ModName, const FString& WebsiteUrl, const FString& Dependencies);
 
 	UFUNCTION(BlueprintCallable, Category = "Mod Building")
 	static bool ZipMod(const FString& ModName);
