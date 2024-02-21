@@ -348,19 +348,16 @@ bool UModBuilder::PrepareModForRelease(const FString& ModName, const FString& We
 		return false;
 	}
 
-	// Create the manifest.json and README.md using the mod properties, but do not overwrite if they already exist
+	// Create the manifest.json and README.md using the mod properties, but only overwrite manifest.json
 	const FString StagingDir = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), Settings->PrepStagingDir.Path) / ModName;
 
 	const FString ManifestPath = StagingDir / "manifest.json";
 	FString ModManifest;
 	CreateModManifest(ModManifest, ModName, WebsiteUrl, Dependencies, ModDesc, ModVersion);
-	if (!FPaths::FileExists(ManifestPath))
+	if (!FFileHelper::SaveStringToFile(ModManifest, *ManifestPath))
 	{
-		if (!FFileHelper::SaveStringToFile(ModManifest, *ManifestPath))
-		{
-			UE_LOG(LogModdingEx, Error, TEXT("Failed to save manifest.json"));
-			return false;
-		}
+		UE_LOG(LogModdingEx, Error, TEXT("Failed to save manifest.json"));
+		return false;
 	}
 
 	const FString ReadmePath = StagingDir / "README.md";
@@ -677,8 +674,9 @@ void UModBuilder::CreateModManifest(FString& OutModManifest, const FString& ModN
 	TArray<TSharedPtr<FJsonValue>> Deps;
 	TArray<FString> DepsArray;
 	Dependencies.ParseIntoArray(DepsArray, TEXT(","), true);
-	for (const FString& Dep : DepsArray)
+	for (FString Dep : DepsArray)
 	{
+		Dep = Dep.TrimStartAndEnd();
 		Deps.Add(MakeShareable(new FJsonValueString(Dep)));
 	}
 

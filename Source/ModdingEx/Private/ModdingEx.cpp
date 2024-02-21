@@ -18,6 +18,7 @@
 #include "UpdateDialog.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Kismet2/SClassPickerDialog.h"
+#include "Misc/FileHelper.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Widgets/Input/SHyperlink.h"
@@ -656,6 +657,38 @@ void FModdingExModule::OnOpenModCreator() const
 
 void FModdingExModule::OnOpenPrepareModForRelease(const FString& Mod) const
 {
+	const auto Settings = GetDefault<UModdingExSettings>();
+	const FString ManifestPath = FPaths::Combine(FPaths::ProjectDir(), Settings->PrepStagingDir.Path, Mod, "manifest.json");
+
+	FString WebsiteUrl = "";
+	FString DependenciesCSV = "Thunderstore-unreal_shimloader-1.0.2";
+
+	if (FPaths::FileExists(ManifestPath))
+	{
+		FString JsonString;
+		FFileHelper::LoadFileToString(JsonString, *ManifestPath);
+		TSharedPtr<FJsonObject> JsonObject;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+		if (FJsonSerializer::Deserialize(Reader, JsonObject))
+		{
+			WebsiteUrl = JsonObject->GetStringField("website_url");
+			const TArray<TSharedPtr<FJsonValue>>* Dependencies;
+			if (JsonObject->TryGetArrayField("dependencies", Dependencies))
+			{
+				FString Deps;
+				for (int32 i = 0; i < Dependencies->Num(); i++)
+				{
+					Deps += Dependencies->operator[](i)->AsString();
+					if (i < Dependencies->Num() - 1)
+					{
+						Deps += ",";
+					}
+				}
+				DependenciesCSV = Deps;
+			}
+		}
+	}
+	
 	const TSharedRef<SWindow> Window = SNew(SWindow)
 		.Title(LOCTEXT("ModdingEx_PrepareModForReleaseTitle", "Prepare Mod For Release"))
         .ClientSize(FVector2D(400, 250))
@@ -663,12 +696,12 @@ void FModdingExModule::OnOpenPrepareModForRelease(const FString& Mod) const
         .SupportsMinimize(false);
 
 	const TSharedRef<SMultiLineEditableTextBox> WebsiteUrlEdit = SNew(SMultiLineEditableTextBox)
-		.Text(FText::FromString(""))
+		.Text(FText::FromString(WebsiteUrl))
 		.ToolTipText(FText::FromString("Website URL (e.g. your GitHub, but you may also leave this empty):"))
 		.SelectAllTextWhenFocused(true);
 
 	const TSharedRef<SMultiLineEditableTextBox> DependenciesEdit = SNew(SMultiLineEditableTextBox)
-		.Text(FText::FromString("thunderstore-unreal_shimloader-1.0.2"))
+		.Text(FText::FromString(DependenciesCSV))
 		.ToolTipText(FText::FromString("Dependencies (comma-separated list):"))
 		.SelectAllTextWhenFocused(true);
 	
