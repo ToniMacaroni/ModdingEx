@@ -526,7 +526,7 @@ bool UModBuilder::ZipModBasic(const FString& ModName, const FString& ModManager)
 	TArray<FString> FilesToZip;
 	FilesToZip.Add(OutFileName);
 
-	if (!ZipModInternal(ModName, FilesToZip, ModManager, "", false))
+	if (!ZipModInternal(ModName, FilesToZip, ModManager, FPaths::GetPath(OutFileName)))
 	{
 		UE_LOG(LogModdingEx, Error, TEXT("Failed to zip mod"));
 		return false;
@@ -541,8 +541,7 @@ bool UModBuilder::ZipModStaging(const FString& ModName, const FString& ModManage
 {
 	const auto Settings = GetDefault<UModdingExSettings>();
 
-	const FString StagingDirWithoutModName = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), Settings->PrepStagingDir.Path);
-	const FString StagingDir = StagingDirWithoutModName / ModName;
+	const FString StagingDir = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), Settings->PrepStagingDir.Path) / ModName;
 	if (!FPaths::DirectoryExists(StagingDir))
 	{
 		UE_LOG(LogModdingEx, Error, TEXT("Staging dir does not exist: %s"), *StagingDir);
@@ -561,7 +560,7 @@ bool UModBuilder::ZipModStaging(const FString& ModName, const FString& ModManage
 	TArray<FString> FilesToZip;
 	IFileManager::Get().FindFilesRecursive(FilesToZip, *StagingDir, TEXT("*.*"), true, false);
 	
-	if (!ZipModInternal(ModName, FilesToZip, ModManager, *StagingDirWithoutModName, true))
+	if (!ZipModInternal(ModName, FilesToZip, ModManager, *StagingDir))
 	{
 		UE_LOG(LogModdingEx, Error, TEXT("Failed to zip mod"));
 		return false;
@@ -573,7 +572,7 @@ bool UModBuilder::ZipModStaging(const FString& ModName, const FString& ModManage
 }
 
 bool UModBuilder::ZipModInternal(const FString& ModName, const TArray<FString>& FilesToZip, const FString& ModManager,
-	const FString& CommonDirectory, const bool bRequiresCommonDirectory = false)
+                                 const FString& CommonDirectory)
 {
 	const auto Settings = GetDefault<UModdingExSettings>();
 
@@ -608,40 +607,33 @@ bool UModBuilder::ZipModInternal(const FString& ModName, const TArray<FString>& 
 		return false;
 	}
 
-	FZipArchiveWriter* ZipWriter = new FZipArchiveWriter(ZipFile);
-	for (const FString FileName : FilesToZip)
+	FZipArchiveWriter ZipWriter(ZipFile);
+	for (const FString& FileName : FilesToZip)
 	{
-		FString RelativePath = FileName;
-
-		FPaths::NormalizeDirectoryName(RelativePath);
-		
-		if (bRequiresCommonDirectory && RelativePath.StartsWith(CommonDirectory))
+		IFileHandle* FileHandle = PlatformFile.OpenRead(*FileName);
+		if (!FileHandle)
 		{
-			// Get clean filename but keep the directory structure after the common directory
-			// E.g. F:\Palworld Modding\Palkit\Saved\Staging\Wow\pak\Wow.pak -> pak\Wow.pak
-			// E.g. F:\Palworld Modding\Palkit\Saved\Staging\Wow\icon.png -> icon.png
-			RelativePath = RelativePath.RightChop(CommonDirectory.Len() + 1);
-		}
-		else
-		{
-			RelativePath = FPaths::GetCleanFilename(RelativePath);
+			UE_LOG(LogModdingEx, Error, TEXT("Failed to open file for reading: %s"), *FileName);
+			continue;
 		}
 		
+		FString ZipPath = FileName;
+		FPaths::MakePathRelativeTo(ZipPath, *CommonDirectory);
+		int32 Index;
+		if (ZipPath.FindChar(TEXT('/'), Index))
+		{
+			ZipPath = ZipPath.Mid(Index + 1);
+		}
+		
+		const int64 FileSize = FileHandle->Size();
 		TArray<uint8> FileData;
-		// TODO: I don't understand why this is failing for "clean" files when it's done outside of the AddFile function like before
-		if(FFileHelper::LoadFileToArray(FileData, *RelativePath))
-		{
-			ZipWriter->AddFile(RelativePath, FileData, FDateTime::Now());
-		}
-		else
-		{
-			UE_LOG(LogModdingEx, Error, TEXT("Failed to zip load file data for: %s"), *RelativePath);
-			return false;
-		}
+		FileData.SetNumUninitialized(FileSize);
+		FileHandle->Read(FileData.GetData(), FileSize);
+		
+		ZipWriter.AddFile(ZipPath, FileData, FDateTime::Now());
+		
+		delete FileHandle;
 	}
-	
-	delete ZipWriter;
-	ZipWriter = nullptr;
 
 	FNotificationInfo Info(FText::FromString("Mod zipped successfully!"));
 	Info.Image = FAppStyle::GetBrush(TEXT("LevelEditor.RecompileGameCode"));

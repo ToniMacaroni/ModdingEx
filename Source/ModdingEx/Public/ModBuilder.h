@@ -20,8 +20,7 @@ private:
 	/** Zips the staging mod directory */
 	static bool ZipModStaging(const FString& ModName, const FString& ModManager);
 
-	static bool ZipModInternal(const FString& ModName, const TArray<FString>& FilesToZip, const FString& ModManager, const FString& CommonDirectory, const
-	                           bool bRequiresCommonDirectory);
+	static bool ZipModInternal(const FString& ModName, const TArray<FString>& FilesToZip, const FString& ModManager, const FString& CommonDirectory);
 
 	static void CreateModManifest(FString& OutModManifest, const FString& ModName, const FString& WebsiteUrl,
 	                              const FString& Dependencies, const FString& ModDesc, const FString& ModVersion);
