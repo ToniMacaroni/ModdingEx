@@ -75,12 +75,12 @@ bool UBlueprintCreator::CreateGameBlueprint(const FString& Path, const FString& 
 				return nullptr;
 			}
 
-			Class = FindObject<UClass>(ANY_PACKAGE, *(ObjectPath + "." + ObjectName));
+			Class = FindObject<UClass>(nullptr, *(ObjectPath + "." + ObjectName));
 		}
 	}
 	else
 	{
-		Class = FindObject<UClass>(ANY_PACKAGE, *ClassName);
+		Class = FindObject<UClass>(nullptr, *ClassName);
 	}
 
 	if(!Class)
@@ -181,13 +181,14 @@ static void InitCustomEvents(const UBlueprint* Blueprint, UEdGraph* Graph)
 
 		if(EventName == "PostBeginPlay")
 		{
-			NewEvent->NodeComment = " This event is fired when the Player Controller Begin Play is called. Suggested for initialization.";
+			NewEvent->NodeComment = "This event is fired when the Player Controller Begin Play is called. Suggested for initialization.";
 			continue;
 		}
 	}
 }
 
-bool UBlueprintCreator::CreateModBlueprint(const FString& ModName, UClass* Class, UBlueprint*& OutBlueprint)
+bool UBlueprintCreator::CreateModBlueprint(UClass* Class, UBlueprint*& OutBlueprint, const FString& ModName,
+                                           const FString& ModAuthor, const FString& ModDesc, const FString& ModVersion)
 {
 	FScopedSlowTask SlowTask(1, FText::FromString("Creating Mod Blueprint"));
 	SlowTask.MakeDialog();
@@ -205,9 +206,9 @@ bool UBlueprintCreator::CreateModBlueprint(const FString& ModName, UClass* Class
 	UEdGraph* UberGraph = OutBlueprint->GetLastEditedUberGraph();
 	InitCustomEvents(OutBlueprint, UberGraph);
 
-	AddVar(OutBlueprint, FName("ModAuthor"), UEdGraphSchema_K2::PC_String, "You", true);
-	AddVar(OutBlueprint, FName("ModDescription"), UEdGraphSchema_K2::PC_String, "A mod that does something", true);
-	AddVar(OutBlueprint, FName("ModVersion"), UEdGraphSchema_K2::PC_String, "1.0.0", true);
+	AddVar(OutBlueprint, FName("ModAuthor"), UEdGraphSchema_K2::PC_String, ModAuthor, true);
+	AddVar(OutBlueprint, FName("ModDescription"), UEdGraphSchema_K2::PC_String, ModDesc, true);
+	AddVar(OutBlueprint, FName("ModVersion"), UEdGraphSchema_K2::PC_String, ModVersion, true);
 
 	FCompilerResultsLog Results;
 	FKismetEditorUtilities::CompileBlueprint(OutBlueprint, EBlueprintCompileOptions::None, &Results);

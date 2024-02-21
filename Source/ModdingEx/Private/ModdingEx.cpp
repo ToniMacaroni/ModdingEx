@@ -1,12 +1,14 @@
 #include "ModdingEx.h"
 
 #include "BlueprintCreator.h"
+#include "FModdingExSettingsCustomization.h"
 #include "ISettingsModule.h"
 #include "ModdingExStyle.h"
 #include "ModdingExCommands.h"
 #include "ModBuilder.h"
 #include "ModdingAssets.h"
 #include "ModdingExSettings.h"
+#include "PropertyEditorModule.h"
 #include "SPositiveActionButton.h"
 #include "StartupDialog.h"
 #include "Widgets/Docking/SDockTab.h"
@@ -16,6 +18,7 @@
 #include "UpdateDialog.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Kismet2/SClassPickerDialog.h"
+#include "Misc/FileHelper.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Widgets/Input/SHyperlink.h"
@@ -51,7 +54,7 @@ void FModdingExModule::StartupModule()
 		FCanExecuteAction());
 
 	PluginCommands->MapAction(
-		FModdingExCommands::Get().OpenModCreator,
+		FModdingExCommands::Get().OpenBlueprintModCreator,
 		FExecuteAction::CreateRaw(this, &FModdingExModule::OnOpenModCreator),
 		FCanExecuteAction());
 
@@ -70,7 +73,16 @@ void FModdingExModule::StartupModule()
 		FExecuteAction::CreateRaw(this, &FModdingExModule::OnOpenRepository),
 		FCanExecuteAction());
 
+	OnModManagerChanged.BindRaw(this, &FModdingExModule::RegisterMenus);
+
 	UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FModdingExModule::RegisterMenus));
+
+	FPropertyEditorModule& PropertyEditorModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+	PropertyEditorModule.RegisterCustomClassLayout(
+		"ModdingExSettings",
+		FOnGetDetailCustomizationInstance::CreateStatic(&FModdingExSettingsCustomization::MakeInstance)
+	);
+
 	FWorldDelegates::OnPostWorldInitialization.AddRaw(this, &FModdingExModule::OnPostWorldInit);
 }
 
@@ -88,25 +100,23 @@ void FModdingExModule::ShutdownModule()
 	{
 		SettingsModule->UnregisterSettings("Project", "Plugins", "ModdingEx");
 	}
+
+	if (FModuleManager::Get().IsModuleLoaded("PropertyEditor"))
+	{
+		FPropertyEditorModule& PropertyEditorModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
+		PropertyEditorModule.UnregisterCustomClassLayout("ModdingExSettings");
+	}
 	
 	FWorldDelegates::OnPostWorldInitialization.RemoveAll(this);
 }
 
 void FModdingExModule::RegisterMenus()
 {
+	// Unregister menus first to clear any previous state
+	UToolMenus::Get()->RemoveSection("LevelEditor.LevelEditorToolBar.PlayToolBar", "ModdingEx_BuildModsEntry");
+	
 	FToolMenuOwnerScoped OwnerScoped(this);
-
 	{
-		// const TSharedRef<SPositiveActionButton> BuildModButton = SNew(SPositiveActionButton)
-		// .ToolTipText(FText::FromString("Build Mod"))
-		// .Icon(FAppStyle::Get().GetBrush("Icons.Adjust"))
-		// .Text(FText::FromString("Build Mod"))
-		// .OnClicked(FOnClicked::CreateLambda([this]
-  //                                           {
-  //                                               BuildMod("ToniMod");
-  //                                               return FReply::Handled();
-  //                                           }));
-
 		UToolMenu* ToolbarMenu = UToolMenus::Get()->ExtendMenu("LevelEditor.LevelEditorToolBar.PlayToolBar");
 		{
 			auto BuildModsEntry = FToolMenuEntry::InitComboButton(
@@ -136,17 +146,55 @@ void FModdingExModule::RegisterMenus()
 
 						MenuBuilder.EndSection();
 
+						const auto Settings = GetDefault<UModdingExSettings>();
+						if (Settings->bUsingThunderstore)
+						{
+							MenuBuilder.BeginSection("ModdingEx_PrepareModsForReleaseEntry", LOCTEXT("ModdingEx_PrepareModForRelease", "Prepare Mod For Release"));
+                            
+                            for (FString Mod : Mods)
+                            {
+                            	MenuBuilder.AddMenuEntry(
+                            		FText::FromString(Mod),
+                            		FText::FromString(FString::Format(TEXT("Prepare {0} for release (and build if configured in settings)"), {Mod})),
+                            		FSlateIcon(),
+                            		FUIAction(FExecuteAction::CreateLambda([this, Mod]
+                            		{
+                            			OnOpenPrepareModForRelease(Mod);
+                            		}))
+                            	);
+                            }
+    
+                            MenuBuilder.EndSection();
+						}
+
 						MenuBuilder.BeginSection("ModdingEx_ZipModsEntry", LOCTEXT("ModdingEx_ZipMod", "Zip Mod"));
 
 						for (FString Mod : Mods)
 						{
 							MenuBuilder.AddMenuEntry(
 								FText::FromString(Mod),
-								FText::FromString(FString::Format(TEXT("Zip (and build if configure in settings) {0}"), {Mod})),
+								FText::FromString(FString::Format(TEXT("Zip (and build if configured in settings) {0}"), {Mod})),
 								FSlateIcon(),
 								FUIAction(FExecuteAction::CreateLambda([this, Mod]
 								{
 									UModBuilder::ZipMod(Mod);
+								}))
+							);
+						}
+
+						MenuBuilder.EndSection();
+
+						MenuBuilder.BeginSection("ModdingEx_UninstallModsEntry", LOCTEXT("ModdingEx_UninstallMod", "Uninstall Mod"));
+
+						for (FString Mod : Mods)
+						{
+							MenuBuilder.AddMenuEntry(
+								FText::FromString(Mod),
+								FText::FromString(FString::Format(TEXT("Uninstall {0} from the game's Paks folder"), {Mod})),
+								FSlateIcon(),
+								FUIAction(FExecuteAction::CreateLambda([this, Mod]
+								{
+									UModBuilder::UninstallMod(Mod);
 								}))
 							);
 						}
@@ -178,7 +226,7 @@ void FModdingExModule::RegisterMenus()
 					{
 						FMenuBuilder MenuBuilder(true, PluginCommands);
 
-						MenuBuilder.AddMenuEntry(FModdingExCommands::Get().OpenModCreator);
+						MenuBuilder.AddMenuEntry(FModdingExCommands::Get().OpenBlueprintModCreator);
 						MenuBuilder.AddMenuEntry(FModdingExCommands::Get().OpenBlueprintCreator);
 						MenuBuilder.AddMenuEntry(FModdingExCommands::Get().OpenGameFolder);
 						MenuBuilder.AddMenuEntry(FModdingExCommands::Get().OpenPluginSettings);
@@ -453,15 +501,29 @@ void FModdingExModule::OnOpenBlueprintCreator() const
 void FModdingExModule::OnOpenModCreator() const
 {
 	const TSharedRef<SWindow> Window = SNew(SWindow)
-		.Title(LOCTEXT("ModdingEx_ModCreatorTitle", "Mod Creator"))
-		.ClientSize({400, 200})
+		.Title(LOCTEXT("ModdingEx_BlueprintModCreatorTitle", "Blueprint Mod Creator"))
+		.ClientSize({500, 400})
 		.SupportsMaximize(false)
 		.SupportsMinimize(false);
 
 	const TSharedRef<SMultiLineEditableTextBox> ModNameEdit = SNew(SMultiLineEditableTextBox)
 		.Text(FText::FromString("MyMod"))
-		.Font(FSlateFontInfo(FPaths::EngineContentDir() / TEXT("Slate/Fonts/Roboto-Bold.ttf"), 12))
 		.ToolTipText(FText::FromString("The name of the mod you want to create. This will be the name of the folder in the Mods folder"))
+		.SelectAllTextWhenFocused(true);
+
+	const TSharedRef<SMultiLineEditableTextBox> ModAuthorEdit = SNew(SMultiLineEditableTextBox)
+		.Text(FText::FromString("Author"))
+		.ToolTipText(FText::FromString("The author of the mod you want to create."))
+		.SelectAllTextWhenFocused(true);
+
+	const TSharedRef<SMultiLineEditableTextBox> ModDescriptionEdit = SNew(SMultiLineEditableTextBox)
+		.Text(FText::FromString("Description"))
+		.ToolTipText(FText::FromString("The description of the mod you want to create."))
+		.SelectAllTextWhenFocused(true);
+
+	const TSharedRef<SMultiLineEditableTextBox> ModVersionEdit = SNew(SMultiLineEditableTextBox)
+		.Text(FText::FromString("1.0.0"))
+		.ToolTipText(FText::FromString("The version of the mod you want to create."))
 		.SelectAllTextWhenFocused(true);
 
 	const auto BlueprintCheck = SNew(SCheckBox)
@@ -471,7 +533,7 @@ void FModdingExModule::OnOpenModCreator() const
 			.Text(FText::FromString("Open Blueprint after creation"))
 		]
 		.IsChecked(true);
-
+	
 	Window->SetContent(
 		SNew(SVerticalBox)
 		+ SVerticalBox::Slot()
@@ -480,15 +542,81 @@ void FModdingExModule::OnOpenModCreator() const
 		[
 			SNew(STextBlock)
 			.Text(FText::FromString(
-				"Put in the name of the mod you want to create and the correct folder structure as well as a 'ModActor' Blueprint will be created for you."
-				))
+				"Put in the details of the mod you want to create and the correct folder structure as well as a 'ModActor' Blueprint will be created for you."
+			))
 			.AutoWrapText(true)
 		]
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		.Padding(7)
 		[
-			ModNameEdit
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString("Name:"))
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0, 5)
+			[
+				ModNameEdit
+			]
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(7)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString("Author:"))
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0, 5)
+			[
+				ModAuthorEdit
+			]
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(7)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString("Description:"))
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0, 5)
+			[
+				ModDescriptionEdit
+			]
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(7)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString("Version:"))
+			]
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			.Padding(0, 5)
+			[
+				ModVersionEdit
+			]
 		]
 		+ SVerticalBox::Slot()
 		.AutoHeight()
@@ -503,10 +631,14 @@ void FModdingExModule::OnOpenModCreator() const
 			SNew(SPositiveActionButton)
 			.ToolTipText(FText::FromString("Create Blueprint at specified path with specified parent class"))
 			.Text(FText::FromString("Create Mod"))
-			.OnClicked(FOnClicked::CreateLambda([ModNameEdit, Window, BlueprintCheck]
+			.OnClicked(FOnClicked::CreateLambda([ModNameEdit, ModAuthorEdit, ModDescriptionEdit, ModVersionEdit, Window, BlueprintCheck]
 					{
 						UBlueprint* ModBlueprint = nullptr;
-						UBlueprintCreator::CreateModBlueprint(ModNameEdit->GetText().ToString(), AActor::StaticClass(), ModBlueprint);
+						UBlueprintCreator::CreateModBlueprint(AActor::StaticClass(),ModBlueprint,
+							ModNameEdit->GetText().ToString(),
+							ModAuthorEdit->GetText().ToString(),
+							ModDescriptionEdit->GetText().ToString(),
+							ModVersionEdit->GetText().ToString());
 
 						if(BlueprintCheck->IsChecked())
 						{
@@ -521,6 +653,114 @@ void FModdingExModule::OnOpenModCreator() const
 
 	const TSharedPtr<SWindow> RootWindow = FGlobalTabmanager::Get()->GetRootWindow();
 	FSlateApplication::Get().AddWindowAsNativeChild(Window, RootWindow.ToSharedRef());
+}
+
+void FModdingExModule::OnOpenPrepareModForRelease(const FString& Mod) const
+{
+	const auto Settings = GetDefault<UModdingExSettings>();
+	const FString ManifestPath = FPaths::Combine(FPaths::ProjectDir(), Settings->PrepStagingDir.Path, Mod, "manifest.json");
+
+	FString WebsiteUrl = "";
+	FString DependenciesCSV = "Thunderstore-unreal_shimloader-1.0.2";
+
+	if (FPaths::FileExists(ManifestPath))
+	{
+		FString JsonString;
+		FFileHelper::LoadFileToString(JsonString, *ManifestPath);
+		TSharedPtr<FJsonObject> JsonObject;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonString);
+		if (FJsonSerializer::Deserialize(Reader, JsonObject))
+		{
+			WebsiteUrl = JsonObject->GetStringField("website_url");
+			const TArray<TSharedPtr<FJsonValue>>* Dependencies;
+			if (JsonObject->TryGetArrayField("dependencies", Dependencies))
+			{
+				FString Deps;
+				for (int32 i = 0; i < Dependencies->Num(); i++)
+				{
+					Deps += Dependencies->operator[](i)->AsString();
+					if (i < Dependencies->Num() - 1)
+					{
+						Deps += ",";
+					}
+				}
+				DependenciesCSV = Deps;
+			}
+		}
+	}
+	
+	const TSharedRef<SWindow> Window = SNew(SWindow)
+		.Title(LOCTEXT("ModdingEx_PrepareModForReleaseTitle", "Prepare Mod For Release"))
+        .ClientSize(FVector2D(400, 250))
+        .SupportsMaximize(false)
+        .SupportsMinimize(false);
+
+	const TSharedRef<SMultiLineEditableTextBox> WebsiteUrlEdit = SNew(SMultiLineEditableTextBox)
+		.Text(FText::FromString(WebsiteUrl))
+		.ToolTipText(FText::FromString("Website URL (e.g. your GitHub, but you may also leave this empty):"))
+		.SelectAllTextWhenFocused(true);
+
+	const TSharedRef<SMultiLineEditableTextBox> DependenciesEdit = SNew(SMultiLineEditableTextBox)
+		.Text(FText::FromString(DependenciesCSV))
+		.ToolTipText(FText::FromString("Dependencies (comma-separated list):"))
+		.SelectAllTextWhenFocused(true);
+	
+	Window->SetContent(
+		SNew(SVerticalBox)
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(7)
+		[
+			SNew(STextBlock)
+			.Text(FText::FromString("Please enter the rest of the details required for creating Thunderstore's manifest.json"))
+			.AutoWrapText(true)
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(7)
+		[
+			SNew(STextBlock)
+			.Text(FText::FromString("Website URL (e.g. your GitHub):"))
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(7)
+		[
+			WebsiteUrlEdit
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(7)
+		[
+			SNew(STextBlock)
+			.Text(FText::FromString("Dependencies (comma-separated list):"))
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(7)
+		[
+			DependenciesEdit
+		]
+		+ SVerticalBox::Slot()
+        .FillHeight(1)
+        .Padding(7)
+        [
+	        SNew(SPositiveActionButton)
+			.ToolTipText(FText::FromString("Save manifest.json settings and prepare the mod for release"))
+            .Text(FText::FromString("Save"))
+            .OnClicked_Lambda([Window, Mod, WebsiteUrlEdit, DependenciesEdit]()
+			{
+                UModBuilder::PrepareModForRelease(Mod,
+                	WebsiteUrlEdit->GetText().ToString(),
+                	DependenciesEdit->GetText().ToString());
+
+            	Window->RequestDestroyWindow();
+				return FReply::Handled();
+			})
+        ]
+    );
+
+    FSlateApplication::Get().AddWindow(Window);
 }
 
 FReply FModdingExModule::TryStartGame() const

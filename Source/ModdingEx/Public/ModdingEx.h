@@ -7,6 +7,7 @@ class FToolBarBuilder;
 class FMenuBuilder;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogModdingEx, Log, All);
+DECLARE_DELEGATE(FOnModManagerChanged);
 
 class FModdingExModule : public IModuleInterface
 {
@@ -19,10 +20,12 @@ public:
 	void OnOpenPluginSettings() const;
 	void OnOpenBlueprintCreator() const;
 	void OnOpenModCreator() const;
+	void OnOpenPrepareModForRelease(const FString& Mod) const;
 	FReply TryStartGame() const;
 	void OnOpenGameFolder() const;
 	void OnOpenRepository() const;
-
+	
+	FOnModManagerChanged OnModManagerChanged;
 
 private:
 	void RegisterMenus();
