@@ -425,6 +425,20 @@ bool UModBuilder::PrepareModForRelease(const FString& ModName, const FString& We
 		return false;
 	}
 
+	FNotificationInfo Info(FText::FromString("Mod prepared for release successfully!"));
+	Info.Image = FAppStyle::GetBrush(TEXT("LevelEditor.RecompileGameCode"));
+	Info.FadeInDuration = 0.1f;
+	Info.FadeOutDuration = 0.5f;
+	Info.ExpireDuration = 3.5f;
+	Info.bUseThrobber = false;
+	Info.bUseSuccessFailIcons = true;
+	Info.bUseLargeFont = true;
+	Info.bFireAndForget = false;
+	Info.bAllowThrottleWhenFrameRateIsLow = false;
+	const auto NotificationItem = FSlateNotificationManager::Get().AddNotification(Info);
+	NotificationItem->SetCompletionState(SNotificationItem::CS_Success);
+	NotificationItem->ExpireAndFadeout();
+
 	return true;
 }
 
