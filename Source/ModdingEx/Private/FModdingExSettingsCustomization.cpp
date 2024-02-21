@@ -9,6 +9,8 @@ void FModdingExSettingsCustomization::CustomizeModManager(IDetailLayoutBuilder& 
     const TSharedPtr<IPropertyHandle> bUsingThunderstoreProperty = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UModdingExSettings, bUsingThunderstore));
     const TSharedPtr<IPropertyHandle> stagingDirProperty = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UModdingExSettings, PrepStagingDir));
     const TSharedPtr<IPropertyHandle> bOpenReadmeAfterPrepProperty = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UModdingExSettings, bOpenReadmeAfterPrep));
+    const TSharedPtr<IPropertyHandle> bAlwaysBuildBeforePrepProperty = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UModdingExSettings, bAlwaysBuildBeforePrep));
+    const TSharedPtr<IPropertyHandle> bPrepModWhenContentIsSameProperty = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UModdingExSettings, bPrepModWhenContentIsSame));
     const TSharedPtr<IPropertyHandle> bAlwaysBuildBeforeZippingProperty = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UModdingExSettings, bAlwaysBuildBeforeZipping));
 
     bUsingCurseforgeProperty->SetOnPropertyValueChanged(FSimpleDelegate::CreateLambda([&DetailBuilder]() { DetailBuilder.ForceRefreshDetails(); }));
@@ -23,6 +25,8 @@ void FModdingExSettingsCustomization::CustomizeModManager(IDetailLayoutBuilder& 
 	{
 		stagingDirProperty->MarkHiddenByCustomization();
 		bOpenReadmeAfterPrepProperty->MarkHiddenByCustomization();
+		bAlwaysBuildBeforePrepProperty->MarkHiddenByCustomization();
+		bPrepModWhenContentIsSameProperty->MarkHiddenByCustomization();
 	}
 
 	if (bUsingThunderstoreValue && !bUsingCurseforgeValue)
@@ -48,6 +52,7 @@ void FModdingExSettingsCustomization::CustomizeHashSettings(IDetailLayoutBuilder
 
 	const TSharedPtr<IPropertyHandle> bShouldCheckHashProperty = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UModdingExSettings, bShouldCheckHash));
 	const TSharedPtr<IPropertyHandle> bZipWhenContentIsSameProperty = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UModdingExSettings, bZipWhenContentIsSame));
+	const TSharedPtr<IPropertyHandle> bPrepModWhenContentIsSameProperty = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UModdingExSettings, bPrepModWhenContentIsSame));
 	const TSharedPtr<IPropertyHandle> bDontCheckHashOnGameStartProperty = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(UModdingExSettings, bDontCheckHashOnGameStart));
 
 	bShouldCheckHashProperty->SetOnPropertyValueChanged(FSimpleDelegate::CreateLambda([&DetailBuilder]() { DetailBuilder.ForceRefreshDetails(); }));
@@ -59,6 +64,7 @@ void FModdingExSettingsCustomization::CustomizeHashSettings(IDetailLayoutBuilder
 	{
 		bZipWhenContentIsSameProperty->MarkHiddenByCustomization();
 		bDontCheckHashOnGameStartProperty->MarkHiddenByCustomization();
+		bPrepModWhenContentIsSameProperty->MarkHiddenByCustomization();
 	}
 }
 

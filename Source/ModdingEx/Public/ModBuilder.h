@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "FileUtilities/ZipArchiveWriter.h"
 #include "ModBuilder.generated.h"
 
 UCLASS(Blueprintable)
@@ -10,8 +11,17 @@ class UModBuilder : public UBlueprintFunctionLibrary
 	
 private:
 	static void EditDirectoriesToAlwaysCook(const FString& DirectoryToCook, const bool bShouldRemove = false);
-	
-	static bool ZipModInternal(const FString& ModName);
+
+	static bool GetOutputPakDirectory(FString& OutDirectory, const FString& ModName);
+
+	/** Basic zip by getting the pak file from the build (game's Paks dir) and zipping */
+	static bool ZipModBasic(const FString& ModName, const FString& ModManager);
+
+	/** Zips the staging mod directory */
+	static bool ZipModStaging(const FString& ModName, const FString& ModManager);
+
+	static bool ZipModInternal(const FString& ModName, const TArray<FString>& FilesToZip, const FString& ModManager, const FString& CommonDirectory, const
+	                           bool bRequiresCommonDirectory);
 
 	static void CreateModManifest(FString& OutModManifest, const FString& ModName, const FString& WebsiteUrl,
 	                              const FString& Dependencies, const FString& ModDesc, const FString& ModVersion);
@@ -36,6 +46,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Mod Building")
 	static bool ZipMod(const FString& ModName);
+
+	UFUNCTION(BlueprintCallable, Category = "Mod Building")
+	static bool UninstallMod(const FString& ModName);
 
 	UFUNCTION(BlueprintCallable, Category = "Mod Building")
 	static bool GetOutputFolder(bool bIsLogicMod, FString& OutFolder);

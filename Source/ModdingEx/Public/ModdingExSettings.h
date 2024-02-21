@@ -125,6 +125,10 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Mod Manager")
 	FDirectoryPath PrepStagingDir = { "Saved/Staging" };
 
+	/** If true will build the mod before preparing it for staging */
+	UPROPERTY(Config, EditAnywhere, Category = "Mod Manager")
+	bool bAlwaysBuildBeforePrep = true;
+
 	/** If you want to open README.md in your default text editor when Prepare For Mod Release runs */
 	UPROPERTY(Config, EditAnywhere, Category = "Mod Manager")
 	bool bOpenReadmeAfterPrep = true;
@@ -148,6 +152,10 @@ public:
 	/** Also zip the mod even if the content stayed the same after building */
 	UPROPERTY(Config, EditAnywhere, Category = "Hash Check")
 	bool bZipWhenContentIsSame = false;
+
+	/** Also prepare the mod for release even if the content stayed the same after building */
+	UPROPERTY(Config, EditAnywhere, Category = "Hash Check")
+	bool bPrepModWhenContentIsSame = false;
 
 	/** If building before starting the game is enabled then this will disable the check to see if the content has changed */
 	UPROPERTY(Config, EditAnywhere, Category = "Hash Check")

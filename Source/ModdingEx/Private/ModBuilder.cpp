@@ -5,8 +5,6 @@
 #include "ModdingEx.h"
 #include "ModdingExSettings.h"
 #include "Async/Async.h"
-#include "FileUtilities/ZipArchiveWriter.h"
-#include "FileUtilities/ZipArchiveWriter.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -331,6 +329,14 @@ bool UModBuilder::BuildMod(const FString& ModName, bool bIsSameContentError)
 
 bool UModBuilder::PrepareModForRelease(const FString& ModName, const FString& WebsiteUrl, const FString& Dependencies)
 {
+	const auto Settings = GetDefault<UModdingExSettings>();
+	
+	if (Settings->bAlwaysBuildBeforePrep && !BuildMod(ModName, !Settings->bPrepModWhenContentIsSame))
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Failed to prepare mod for release because building failed"));
+		return false;
+	}
+	
 	// Fetch the mod author, description and version from the /Game/Mods/ModName/ModActor blueprint
 	FString ModAuthor = "Unknown";
 	FString ModDesc = "Unknown";
@@ -342,34 +348,84 @@ bool UModBuilder::PrepareModForRelease(const FString& ModName, const FString& We
 		return false;
 	}
 
-	// Create the manifest.json and README.md using the mod properties
-	const auto Settings = GetDefault<UModdingExSettings>();
-
+	// Create the manifest.json and README.md using the mod properties, but do not overwrite if they already exist
 	const FString StagingDir = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), Settings->PrepStagingDir.Path) / ModName;
 
 	const FString ManifestPath = StagingDir / "manifest.json";
 	FString ModManifest;
 	CreateModManifest(ModManifest, ModName, WebsiteUrl, Dependencies, ModDesc, ModVersion);
-
-	if (!FFileHelper::SaveStringToFile(ModManifest, *ManifestPath))
+	if (!FPaths::FileExists(ManifestPath))
 	{
-		UE_LOG(LogModdingEx, Error, TEXT("Failed to save manifest.json"));
-		return false;
+		if (!FFileHelper::SaveStringToFile(ModManifest, *ManifestPath))
+		{
+			UE_LOG(LogModdingEx, Error, TEXT("Failed to save manifest.json"));
+			return false;
+		}
 	}
 
 	const FString ReadmePath = StagingDir / "README.md";
 	FString Readme;
 	CreateModReadme(Readme, ModName, ModDesc, ModVersion, ModAuthor);
-
-	if (Settings->bOpenReadmeAfterPrep)
+	
+	if (!FPaths::FileExists(ReadmePath))
 	{
 		if (!FFileHelper::SaveStringToFile(Readme, *ReadmePath))
 		{
 			UE_LOG(LogModdingEx, Error, TEXT("Failed to save README.md"));
 			return false;
 		}
-
+	}
+	
+	if (Settings->bOpenReadmeAfterPrep)
+	{
 		FPlatformProcess::LaunchFileInDefaultExternalApplication(*ReadmePath, nullptr, ELaunchVerb::Edit);
+	}
+
+	// Copy TempModIcon.png from Resources folder to the staging dir
+	const FString IconPath = StagingDir / "icon.png";
+	const FString PluginIconPath = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), TEXT("Plugins/ModdingEx/Resources/TempModIcon.png"));
+
+	if (!FPaths::FileExists(PluginIconPath))
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Icon file does not exist: %s"), *PluginIconPath);
+		return false;
+	}
+	
+	if (!FPaths::FileExists(IconPath))
+	{
+		if (!FPlatformFileManager::Get().GetPlatformFile().CopyFile(*IconPath, *PluginIconPath))
+		{
+			UE_LOG(LogModdingEx, Error, TEXT("Failed to copy icon file"));
+			return false;
+		}
+	}
+
+	FString OutFileName;
+	if (!GetOutputPakDirectory(OutFileName, ModName))
+	{
+		return false;
+	}
+
+	if (!FPaths::FileExists(OutFileName))
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Output file does not exist: %s"), *OutFileName);
+		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString("Didn't find any pak file to copy. Make sure you built the mod successfully."));
+		return false;
+	}
+
+	// Copy pak file from OutFileName to the staging dir/pak/
+	// There currently isn't any support for non-logic mods with Thunderstore, so this will have to be updated in the future when there is
+	const FString PakDir = StagingDir / "pak";
+	if (!FPaths::DirectoryExists(PakDir) && !IFileManager::Get().MakeDirectory(*PakDir, true))
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Pak dir does not exist: %s"), *PakDir);
+		return false;
+	}
+
+	if (!FPlatformFileManager::Get().GetPlatformFile().CopyFile(*FString(PakDir / ModName + ".pak"), *OutFileName))
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Failed to copy pak file"));
+		return false;
 	}
 
 	return true;
@@ -430,15 +486,14 @@ void UModBuilder::EditDirectoriesToAlwaysCook(const FString& DirectoryToCook, co
 	}
 }
 
-bool UModBuilder::ZipModInternal(const FString& ModName)
+bool UModBuilder::GetOutputPakDirectory(FString& OutDirectory, const FString& ModName)
 {
-	const auto Settings = GetDefault<UModdingExSettings>();
-
 	FString OutputDir;
+	// TODO: Support non-logic mods and remove this hardcoded terribleness
 	if (!GetOutputFolder(true, OutputDir))
 	{
 		if (FMessageDialog::Open(EAppMsgType::YesNo, FText::FromString(
-			                         "Game dir is not set or does not exist. Should I take you to the setting?.")) == EAppReturnType::Yes)
+									 "Game dir is not set or does not exist. Should I take you to the setting?.")) == EAppReturnType::Yes)
 		{
 			FModuleManager::LoadModuleChecked<ISettingsModule>("Settings").ShowViewer("Project", "Plugins", "ModdingEx");
 		}
@@ -449,7 +504,17 @@ bool UModBuilder::ZipModInternal(const FString& ModName)
 
 	UE_LOG(LogModdingEx, Log, TEXT("Output dir: %s"), *OutputDir);
 
-	const FString OutFileName = OutputDir / (ModName + ".pak");
+	OutDirectory = OutputDir / (ModName + ".pak");
+	return true;
+}
+
+bool UModBuilder::ZipModBasic(const FString& ModName, const FString& ModManager)
+{
+	FString OutFileName;
+	if (!GetOutputPakDirectory(OutFileName, ModName))
+	{
+		return false;
+	}
 
 	if (!FPaths::FileExists(OutFileName))
 	{
@@ -458,8 +523,66 @@ bool UModBuilder::ZipModInternal(const FString& ModName)
 		return false;
 	}
 
-	const FString ZipsPath = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), Settings->ModZipDir.Path);
+	TArray<FString> FilesToZip;
+	FilesToZip.Add(OutFileName);
 
+	if (!ZipModInternal(ModName, FilesToZip, ModManager, "", false))
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Failed to zip mod"));
+		return false;
+	}
+
+	UE_LOG(LogModdingEx, Log, TEXT("Zipped mod %s"), *ModName);
+
+	return true;
+}
+
+bool UModBuilder::ZipModStaging(const FString& ModName, const FString& ModManager)
+{
+	const auto Settings = GetDefault<UModdingExSettings>();
+
+	const FString StagingDirWithoutModName = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), Settings->PrepStagingDir.Path);
+	const FString StagingDir = StagingDirWithoutModName / ModName;
+	if (!FPaths::DirectoryExists(StagingDir))
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Staging dir does not exist: %s"), *StagingDir);
+		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString("Staging dir does not exist. Make sure you prepared the mod for release first!"));
+		return false;
+	}
+	
+	const FString PakPath = StagingDir / "pak" / (ModName + ".pak");
+	if (!FPaths::FileExists(PakPath))
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Pak file does not exist: %s"), *PakPath);
+		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString("Pak file does not exist. Make sure you prepared the mod for release first!"));
+		return false;
+	}
+	
+	TArray<FString> FilesToZip;
+	IFileManager::Get().FindFilesRecursive(FilesToZip, *StagingDir, TEXT("*.*"), true, false);
+	
+	if (!ZipModInternal(ModName, FilesToZip, ModManager, *StagingDirWithoutModName, true))
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Failed to zip mod"));
+		return false;
+	}
+
+	UE_LOG(LogModdingEx, Log, TEXT("Zipped mod %s"), *ModName);
+	
+	return true;
+}
+
+bool UModBuilder::ZipModInternal(const FString& ModName, const TArray<FString>& FilesToZip, const FString& ModManager,
+	const FString& CommonDirectory, const bool bRequiresCommonDirectory = false)
+{
+	const auto Settings = GetDefault<UModdingExSettings>();
+
+	FString ZipsPath = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), Settings->ModZipDir.Path + "/" + ModManager);
+	if (ModManager == "None")
+	{
+		ZipsPath = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir(), Settings->ModZipDir.Path);
+	}
+	
 	if (!FPaths::DirectoryExists(ZipsPath) && !IFileManager::Get().MakeDirectory(*ZipsPath, true))
 	{
 		UE_LOG(LogModdingEx, Error, TEXT("Zips dir does not exist: %s"), *ZipsPath);
@@ -486,19 +609,37 @@ bool UModBuilder::ZipModInternal(const FString& ModName)
 	}
 
 	FZipArchiveWriter* ZipWriter = new FZipArchiveWriter(ZipFile);
-
-	TArray<FString> FilesToArchive{OutFileName};
-
-	// TODO: Curse Forge requires all files to be at the root. Support other formats (if any) as well.
-	for (FString FileName : FilesToArchive)
+	for (const FString FileName : FilesToZip)
 	{
+		FString RelativePath = FileName;
+
+		FPaths::NormalizeDirectoryName(RelativePath);
+		
+		if (bRequiresCommonDirectory && RelativePath.StartsWith(CommonDirectory))
+		{
+			// Get clean filename but keep the directory structure after the common directory
+			// E.g. F:\Palworld Modding\Palkit\Saved\Staging\Wow\pak\Wow.pak -> pak\Wow.pak
+			// E.g. F:\Palworld Modding\Palkit\Saved\Staging\Wow\icon.png -> icon.png
+			RelativePath = RelativePath.RightChop(CommonDirectory.Len() + 1);
+		}
+		else
+		{
+			RelativePath = FPaths::GetCleanFilename(RelativePath);
+		}
+		
 		TArray<uint8> FileData;
-		FFileHelper::LoadFileToArray(FileData, *FileName);
-		// FPaths::MakePathRelativeTo(FileName, *OutputDir);
-
-		ZipWriter->AddFile(FPaths::GetCleanFilename(FileName), FileData, FDateTime::Now());
+		// TODO: I don't understand why this is failing for "clean" files when it's done outside of the AddFile function like before
+		if(FFileHelper::LoadFileToArray(FileData, *RelativePath))
+		{
+			ZipWriter->AddFile(RelativePath, FileData, FDateTime::Now());
+		}
+		else
+		{
+			UE_LOG(LogModdingEx, Error, TEXT("Failed to zip load file data for: %s"), *RelativePath);
+			return false;
+		}
 	}
-
+	
 	delete ZipWriter;
 	ZipWriter = nullptr;
 
@@ -640,5 +781,46 @@ bool UModBuilder::ZipMod(const FString& ModName)
 		return false;
 	}
 
-	return ZipModInternal(ModName);
+	// Yes, this is nasty boolean logic, but only because more mod managers may be supported and we want an easy way to add them
+	bool bIsZipped = false;
+	if (Settings->bUsingThunderstore)
+	{
+		bIsZipped = ZipModStaging(ModName, "Thunderstore");
+	}
+
+	if (Settings->bUsingCurseforge)
+	{
+		bIsZipped = ZipModBasic(ModName, "Curseforge");
+	}
+
+	// Default to basic zipping if no mod manager is selected (for now)
+	if (!Settings->bUsingThunderstore && !Settings->bUsingCurseforge)
+	{
+		bIsZipped = ZipModBasic(ModName, "None");
+	}
+
+	return bIsZipped;
+}
+
+bool UModBuilder::UninstallMod(const FString& ModName)
+{
+	FString OutFileName;
+	if (!GetOutputPakDirectory(OutFileName, ModName))
+	{
+		return false;
+	}
+
+	if (!FPaths::FileExists(OutFileName))
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Output file does not exist: %s, nothing to uninstall"), *OutFileName);
+		return false;
+	}
+
+	if (!FPlatformFileManager::Get().GetPlatformFile().DeleteFile(*OutFileName))
+	{
+		UE_LOG(LogModdingEx, Error, TEXT("Failed to delete file: %s"), *OutFileName);
+		return false;
+	}
+	
+	return true;
 }

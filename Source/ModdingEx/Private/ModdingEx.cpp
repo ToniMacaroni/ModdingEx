@@ -154,7 +154,7 @@ void FModdingExModule::RegisterMenus()
                             {
                             	MenuBuilder.AddMenuEntry(
                             		FText::FromString(Mod),
-                            		FText::FromString(FString::Format(TEXT("Prepare your mod for release (and build if configured in settings) {0}"), {Mod})),
+                            		FText::FromString(FString::Format(TEXT("Prepare {0} for release (and build if configured in settings)"), {Mod})),
                             		FSlateIcon(),
                             		FUIAction(FExecuteAction::CreateLambda([this, Mod]
                             		{
@@ -177,6 +177,23 @@ void FModdingExModule::RegisterMenus()
 								FUIAction(FExecuteAction::CreateLambda([this, Mod]
 								{
 									UModBuilder::ZipMod(Mod);
+								}))
+							);
+						}
+
+						MenuBuilder.EndSection();
+
+						MenuBuilder.BeginSection("ModdingEx_UninstallModsEntry", LOCTEXT("ModdingEx_UninstallMod", "Uninstall Mod"));
+
+						for (FString Mod : Mods)
+						{
+							MenuBuilder.AddMenuEntry(
+								FText::FromString(Mod),
+								FText::FromString(FString::Format(TEXT("Uninstall {0} from the game's Paks folder"), {Mod})),
+								FSlateIcon(),
+								FUIAction(FExecuteAction::CreateLambda([this, Mod]
+								{
+									UModBuilder::UninstallMod(Mod);
 								}))
 							);
 						}
