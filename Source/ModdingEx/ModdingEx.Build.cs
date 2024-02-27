@@ -49,7 +49,8 @@ public class ModdingEx : ModuleRules
 				"Engine",
 				"Slate",
 				"SlateCore",
-				"ToolWidgets", "Json", "Kismet", "BlueprintGraph", "FileUtilities", "PropertyEditor", "HTTP"
+				"ToolWidgets", "Json", "Kismet", "BlueprintGraph", "FileUtilities", "PropertyEditor", "HTTP",
+				"JsonUtilities", "ContentBrowserData"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
@@ -61,5 +62,15 @@ public class ModdingEx : ModuleRules
 				// ... add any modules that your module loads dynamically here ...
 			}
 			);
+
+		var ThirdPartyFolder = Path.Combine(ModuleDirectory, "../../ThirdParty");
+		PublicIncludePaths.Add(Path.Combine(ThirdPartyFolder, "include"));
+
+		var LibraryFolder = Path.Combine(ThirdPartyFolder, "lib");
+		
+		PublicAdditionalLibraries.Add(Path.Combine(LibraryFolder, "zip.lib"));
+		PublicAdditionalLibraries.Add(Path.Combine(LibraryFolder, "zlibstatic.lib"));
+
+		var BinaryFolder = Path.Combine(ThirdPartyFolder, "bin");
 	}
 }

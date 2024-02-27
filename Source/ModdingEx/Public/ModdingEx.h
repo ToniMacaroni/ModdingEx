@@ -2,11 +2,14 @@
 
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
+#include "ModdingExSection.h"
+#include "Thunderstore/Thunderstore.h"
 
 class FToolBarBuilder;
 class FMenuBuilder;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogModdingEx, Log, All);
+
 DECLARE_DELEGATE(FOnModManagerChanged);
 
 class FModdingExModule : public IModuleInterface
@@ -24,7 +27,7 @@ public:
 	FReply TryStartGame() const;
 	void OnOpenGameFolder() const;
 	void OnOpenRepository() const;
-	
+
 	FOnModManagerChanged OnModManagerChanged;
 
 private:
@@ -32,6 +35,10 @@ private:
 
 	TSharedPtr<FUICommandList> PluginCommands;
 
+	TArray<FModdingExSection> Sections;
+
+	FThunderstore Thunderstore;
+	
 	// List of mods that can be build before starting the game + "None"
 	TArray<TSharedPtr<FString>> StartBuildMods;
 	TSharedPtr<FString> SelectedStartBuildMod;
