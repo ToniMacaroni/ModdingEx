@@ -177,4 +177,8 @@ public:
 	/** Whether to notify once an update to the plugin is available */
 	UPROPERTY(Config, EditAnywhere, Category = "Misc")
 	bool bShowUpdateDialog = true;
+
+	/** Thunderstore community name **/
+	UPROPERTY(Config, EditAnywhere, Category = "Thunderstore")
+	FString ThunderstoreCommunityName = "palworld";
 };

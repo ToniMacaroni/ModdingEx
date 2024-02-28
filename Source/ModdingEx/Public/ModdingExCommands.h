@@ -7,9 +7,9 @@
 class FModdingExCommands : public TCommands<FModdingExCommands>
 {
 public:
-
 	FModdingExCommands()
-		: TCommands(TEXT("ModdingEx"), NSLOCTEXT("Contexts", "ModdingEx", "ModdingEx Plugin"), NAME_None, FModdingExStyle::GetStyleSetName())
+		: TCommands(TEXT("ModdingEx"), NSLOCTEXT("Contexts", "ModdingEx", "ModdingEx Plugin"), NAME_None,
+		            FModdingExStyle::GetStyleSetName())
 	{
 	}
 

@@ -21,7 +21,6 @@
 #include "Misc/FileHelper.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
-#include "Widgets/Input/SHyperlink.h"
 #include "Widgets/Input/SMultiLineEditableTextBox.h"
 #include "Widgets/Input/STextComboBox.h"
 
@@ -35,9 +34,9 @@ void FModdingExModule::StartupModule()
 {
 	FModdingExStyle::Initialize();
 	FModdingExStyle::ReloadTextures();
-
+	
 	FModdingExCommands::Register();
-
+	
 	if (ISettingsModule* SettingsModule = FModuleManager::GetModulePtr<ISettingsModule>("Settings"))
 	{
 		SettingsModule->RegisterSettings("Project", "Plugins", "ModdingEx",
@@ -72,6 +71,8 @@ void FModdingExModule::StartupModule()
 		FModdingExCommands::Get().OpenRepository,
 		FExecuteAction::CreateRaw(this, &FModdingExModule::OnOpenRepository),
 		FCanExecuteAction());
+
+	Thunderstore.RegisterSections(Sections, PluginCommands);
 
 	OnModManagerChanged.BindRaw(this, &FModdingExModule::RegisterMenus);
 
@@ -231,6 +232,16 @@ void FModdingExModule::RegisterMenus()
 						MenuBuilder.AddMenuEntry(FModdingExCommands::Get().OpenGameFolder);
 						MenuBuilder.AddMenuEntry(FModdingExCommands::Get().OpenPluginSettings);
 
+						for (const auto& Section : Sections)
+						{
+							MenuBuilder.BeginSection(Section.ExtensionHook, Section.HeadingText);
+							for (const auto& Entry : Section.Entries)
+							{
+								MenuBuilder.AddMenuEntry(Entry);
+							}
+							MenuBuilder.EndSection();
+						}
+						
 						MenuBuilder.BeginSection(FName("ModdingEx_GoTo"), LOCTEXT("ModdingEx_GoTo", "Go To"));
 						MenuBuilder.AddMenuEntry(FModdingExCommands::Get().OpenRepository);
 						MenuBuilder.EndSection();
